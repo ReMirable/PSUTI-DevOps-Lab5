@@ -1,0 +1,45 @@
+
+services:
+  db:
+    image: postgis/postgis:17-3.6
+    environment:
+      POSTGRES_DB: kazan_events
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local_dev_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kazan_events"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  backend:
+    image: ghcr.io/nelkor/kazan-events:latest
+    environment:
+      PG_HOST: db
+      PG_PORT: "5432"
+      PG_DB_NAME: kazan_events
+      PG_USER_NAME: postgres
+      PG_USER_PASSWORD: local_dev_password
+      SEED_MODE: sample
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
