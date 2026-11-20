@@ -1,45 +1,93 @@
+# Лабораторная работа №5
+# Приложение для создания повторяющихся событий
+
 
 services:
+
+  # ==========================================
+  # 1. БАЗА ДАННЫХ PostgreSQL + PostGIS
+  # ==========================================
   db:
+    # Используем готовый образ PostgreSQL с расширением PostGIS
     image: postgis/postgis:17-3.6
+
+    # Настройки подключения к базе данных
     environment:
       POSTGRES_DB: kazan_events
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: local_dev_password
+
+    # Сохраняем данные базы в постоянном Docker volume
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+    # Проверяем, готова ли база принимать подключения
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d kazan_events"]
       interval: 5s
       timeout: 5s
       retries: 15
+
+    # Автоматически перезапускаем контейнер,
+    # если он завершился неожиданно
     restart: unless-stopped
 
+  # ==========================================
+  # 2. BACKEND (FastAPI)
+  # ==========================================
   backend:
+    # Готовый образ backend из GitHub Container Registry
     image: ghcr.io/nelkor/kazan-events:latest
+
+    # Переменные окружения для подключения к PostgreSQL
     environment:
       PG_HOST: db
       PG_PORT: "5432"
       PG_DB_NAME: kazan_events
       PG_USER_NAME: postgres
       PG_USER_PASSWORD: local_dev_password
+
+      # Режим загрузки демонстрационных данных
       SEED_MODE: sample
+
+    # Пробрасываем порт backend на компьютер
+    # 8000 слева — порт компьютера
+    # 8000 справа — порт контейнера
     ports:
       - "8000:8000"
+
+    # Запускаем backend только после готовности базы данных
     depends_on:
       db:
         condition: service_healthy
+
+    # Автоматический перезапуск контейнера
     restart: unless-stopped
 
+  # ==========================================
+  # 3. FRONTEND (React + NGINX)
+  # ==========================================
   frontend:
+    # Собираем собственный Docker-образ из папки frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
+
+    # Порт 8080 компьютера направляется на порт 80 NGINX
     ports:
       - "8080:80"
+
+    # Backend запускается раньше frontend
     depends_on:
       - backend
+
+    # Автоматический перезапуск контейнера
     restart: unless-stopped
 
+# ==========================================
+# ПОСТОЯННОЕ ХРАНЕНИЕ ДАННЫХ
+# ==========================================
 volumes:
+  # Docker создаёт именованный том для PostgreSQL.
+  # Данные сохраняются даже после docker compose down.
   postgres_data:
